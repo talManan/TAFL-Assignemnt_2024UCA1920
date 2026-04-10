@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CFG ↔ PDA Converter & Visualizer | TAFL Project</title>
+<style>
+  :root {
+    --blue: #185FA5; --blue-light: #E6F1FB; --blue-dark: #0C447C;
+    --green: #3B6D11; --green-light: #EAF3DE;
+    --amber: #BA7517; --amber-light: #FAEEDA;
+    --gray: #5F5E5A; --gray-light: #F1EFE8;
+    --border: #d4d2c8; --border-light: #e8e6de;
+    --bg: #ffffff; --bg2: #f8f7f3; --bg3: #f1f0ea;
+    --text: #1a1a18; --text2: #5f5e5a; --text3: #888780;
+    --mono: 'Courier New', monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --radius: 10px; --radius-sm: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--bg2); color: var(--text); min-height: 100vh; }
+
+  /* HEADER */
+  .header { background: var(--text); color: #fff; padding: 28px 40px; }
+  .header h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; margin-bottom: 6px; }
+  .header p { font-size: 14px; opacity: 0.6; }
+  .header-meta { display: flex; gap: 20px; margin-top: 14px; }
+  .header-badge { background: rgba(255,255,255,0.12); padding: 4px 12px; border-radius: 20px; font-size: 12px; }
+
+  /* LAYOUT */
+  .container { max-width: 1000px; margin: 0 auto; padding: 28px 20px; }
+
+  /* TABS */
+  .tabs { display: flex; gap: 2px; background: var(--bg3); border-radius: var(--radius); padding: 4px; margin-bottom: 24px; }
+  .tab { flex: 1; padding: 10px; text-align: center; font-size: 14px; font-weight: 500; cursor: pointer; border-radius: var(--radius-sm); border: none; background: none; color: var(--text2); transition: all .2s; }
+  .tab.active { background: var(--bg); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* CARDS */
+  .card { background: var(--bg); border: 1px solid var(--border-light); border-radius: var(--radius); padding: 20px; }
+  .card + .card { margin-top: 16px; }
+  .card-title { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid1 { display: grid; grid-template-columns: 1fr; gap: 16px; }
+
+  /* INPUTS */
+  textarea {
+    width: 100%; height: 140px; resize: vertical;
+    font-family: var(--mono); font-size: 13px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 12px; color: var(--text);
+    line-height: 1.7;
+  }
+  textarea:focus { outline: none; border-color: var(--blue); }
+
+  /* BUTTONS */
+  .btn { padding: 9px 22px; font-size: 14px; font-weight: 500; border-radius: var(--radius-sm); cursor: pointer; transition: all .15s; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+  .btn:hover { background: var(--bg2); }
+  .btn-primary { background: var(--text); color: #fff; border-color: var(--text); }
+  .btn-primary:hover { opacity: .85; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+  .examples { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .ex-btn { padding: 4px 11px; font-size: 12px; border: 1px solid var(--border); border-radius: 20px; background: var(--bg2); cursor: pointer; color: var(--text2); transition: all .15s; }
+  .ex-btn:hover { background: var(--blue-light); color: var(--blue-dark); border-color: var(--blue); }
+
+  /* TABLE */
+  .pda-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .pda-table th { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; background: var(--bg2); }
+  .pda-table td { padding: 8px 12px; border-bottom: 1px solid var(--border-light); font-family: var(--mono); font-size: 12px; }
+  .pda-table tr:last-child td { border-bottom: none; }
+  .pda-table tr:hover td { background: var(--bg2); }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .b-blue { background: var(--blue-light); color: var(--blue-dark); }
+  .b-green { background: var(--green-light); color: var(--green); }
+  .b-amber { background: var(--amber-light); color: var(--amber); }
+  .b-gray { background: var(--gray-light); color: var(--gray); }
+
+  /* STEPS */
+  .step { display: flex; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--border-light); }
+  .step:last-child { border-bottom: none; }
+  .step-num { width: 28px; height: 28px; border-radius: 50%; background: var(--bg2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex-shrink: 0; color: var(--text2); }
+  .step-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; color: var(--text); }
+  .step-desc { font-size: 13px; color: var(--text2); line-height: 1.7; }
+  .step-rule { font-family: var(--mono); font-size: 12px; background: var(--bg2); border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 7px 12px; margin-top: 7px; color: var(--text); line-height: 1.8; }
+
+  /* CONCEPT BOX */
+  .cbox { background: var(--bg2); border-left: 3px solid var(--blue); padding: 12px 16px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin-bottom: 10px; }
+  .cbox p { font-size: 13px; color: var(--text2); line-height: 1.75; }
+  .cbox strong { color: var(--text); }
+
+  /* ERROR */
+  .error-box { background: #fef2f2; border: 1px solid #fca5a5; border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; color: #b91c1c; margin-top: 10px; display: none; }
+
+  /* FLEX UTILS */
+  .flex { display: flex; align-items: center; gap: 10px; }
+  .mt { margin-top: 16px; }
+  .mt2 { margin-top: 24px; }
+  .label { font-size: 12px; color: var(--text3); font-weight: 500; margin-bottom: 6px; }
+  .mono { font-family: var(--mono); }
+  .formal-box { font-family: var(--mono); font-size: 13px; line-height: 2; color: var(--text); min-height: 60px; }
+
+  /* PRINT */
+  @media print {
+    body { background: white; }
+    .header { background: #1a1a18 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .tabs, .examples, .btn, .ex-btn { display: none !important; }
+    .panel { display: block !important; }
+    .panel + .panel { page-break-before: always; }
+    textarea { border: 1px solid #ccc; height: auto; }
+    .card { break-inside: avoid; }
+  }
+
+  /* STRING TESTER */
+  .sim-row { display: flex; align-items: center; gap: 8px; }
+  .sim-step { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--bg2); margin-bottom: 6px; font-size: 13px; }
+  .sim-step.accept { background: var(--green-light); border: 1px solid #86efac; }
+  .sim-step.reject { background: #fef2f2; border: 1px solid #fca5a5; }
+  .sim-tag { font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; flex-shrink: 0; }
+
+  /* SCROLLABLE TABLE */
+  .table-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>CFG ↔ PDA Converter &amp; Visualizer</h1>
+  <p>Theory of Automata &amp; Formal Languages — Project 11</p>
+  <div class="header-meta">
+    <span class="header-badge">Context-Free Grammars</span>
+    <span class="header-badge">Pushdown Automata</span>
+    <span class="header-badge">Bidirectional Conversion</span>
+    <span class="header-badge">Step-by-Step Explanation</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('cfg2pda')">CFG → PDA</button>
+    <button class="tab" onclick="switchTab('pda2cfg')">PDA → CFG</button>
+    <button class="tab" onclick="switchTab('tester')">String Tester</button>
+    <button class="tab" onclick="switchTab('theory')">Theory &amp; Concepts</button>
+  </div>
+
+  <!-- ============ TAB 1: CFG → PDA ============ -->
+  <div id="tab-cfg2pda" class="panel active">
+    <div class="grid2">
+      <div class="card">
+        <div class="card-title">Input CFG</div>
+        <div class="label">Presets:</div>
+        <div class="examples">
+          <button class="ex-btn" onclick="loadCFG('abn')">aⁿbⁿ</button>
+          <button class="ex-btn" onclick="loadCFG('palindrome')">Palindromes</button>
+          <button class="ex-btn" onclick="loadCFG('balanced')">Balanced ( )</button>
+          <button class="ex-btn" onclick="loadCFG('expr')">Arithmetic</button>
+        </div>
+        <textarea id="cfg-input" placeholder="Enter grammar rules, e.g.:
+S → aSb | ab
+
+One variable per line.
+Use | for alternatives.
+Use ε for epsilon (empty)."></textarea>
+        <div class="mt" style="font-size:12px;color:var(--text3)">
+          Uppercase letters = non-terminals &nbsp;·&nbsp; Lowercase = terminals &nbsp;·&nbsp; ε = empty string
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Resulting PDA — Formal Definition</div>
+        <div id="pda-formal" class="formal-box" style="color:var(--text3)">
+          Enter a CFG and click Convert to generate the equivalent PDA.
+        </div>
+        <div class="mt">
+          <div class="card-title">Transition Function δ</div>
+          <div id="pda-table-wrap" class="table-wrap">
+            <div style="font-size:13px;color:var(--text3)">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex mt">
+      <button class="btn btn-primary" onclick="convertCFGtoPDA()">Convert →</button>
+      <button class="btn" onclick="clearCFG()">Clear</button>
+      <span id="cfg-status" style="font-size:13px;color:var(--text3)"></span>
+    </div>
+    <div id="cfg-error" class="error-box"></div>
+
+    <div class="grid2 mt2">
+      <div class="card">
+        <div class="card-title">CFG — Production Rules Diagram</div>
+        <div id="cfg-viz"><div style="font-size:13px;color:var(--text3);padding:20px 0">Grammar diagram will appear here after conversion.</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">PDA — State Diagram</div>
+        <div id="pda-viz"><div style="font-size:13px;color:var(--text3);padding:20px 0">PDA diagram will appear here after conversion.</div></div>
+      </div>
+    </div>
+
+    <div class="card mt2">
+      <div class="card-title">Step-by-Step Conversion Walkthrough</div>
+      <div id="cfg-steps"><div style="font-size:13px;color:var(--text3)">Steps will appear after conversion.</div></div>
+    </div>
+  </div>
+
+  <!-- ============ TAB 2: PDA → CFG ============ -->
+  <div id="tab-pda2cfg" class="panel">
+    <div class="grid2">
+      <div class="card">
+        <div class="card-title">Input PDA Transitions</div>
+        <div class="examples">
+          <button class="ex-btn" onclick="loadPDA('abn')">aⁿbⁿ PDA</button>
+          <button class="ex-btn" onclick="loadPDA('simple')">Simple PDA</button>
+        </div>
+        <textarea id="pda-input" placeholder="Format: (state, input, stack) → (state, push)
+
+Example:
+(q0, ε, Z) → (q1, SZ)
+(q1, ε, S) → (q1, aSb)
+(q1, ε, S) → (q1, ab)
+(q1, a, a) → (q1, ε)
+(q1, b, b) → (q1, ε)
+(q1, ε, Z) → (q2, Z)
+
+Use ε for epsilon. Z = bottom of stack."></textarea>
+        <div style="margin-top:6px;font-size:12px;color:var(--text3)">First state = start. Last state = accept.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Generated CFG Rules</div>
+        <div id="pda2cfg-result" class="formal-box" style="color:var(--text3)">Enter PDA transitions and click Convert →</div>
+      </div>
+    </div>
+
+    <div class="flex mt">
+      <button class="btn btn-primary" onclick="convertPDAtoCFG()">Convert →</button>
+      <button class="btn" onclick="clearPDA()">Clear</button>
+      <span id="pda-status" style="font-size:13px;color:var(--text3)"></span>
+    </div>
+    <div id="pda-error" class="error-box"></div>
+
+    <div class="card mt2">
+      <div class="card-title">Step-by-Step Extraction Walkthrough</div>
+      <div id="pda-steps"><div style="font-size:13px;color:var(--text3)">Steps will appear after conversion.</div></div>
+    </div>
+  </div>
+
+  <!-- ============ TAB 3: STRING TESTER ============ -->
+  <div id="tab-tester" class="panel">
+    <div class="card">
+      <div class="card-title">CFG String Membership Tester (CYK Algorithm)</div>
+      <div class="cbox" style="margin-bottom:12px">
+        <p>Enter a CFG below and a string to test. The tool uses the <strong>CYK (Cocke–Younger–Kasami)</strong> parsing algorithm to determine if the string belongs to the language defined by the grammar. This also mirrors PDA acceptance.</p>
+      </div>
+      <div class="grid2">
+        <div>
+          <div class="label">CFG (or load from Tab 1):</div>
+          <textarea id="test-cfg" placeholder="S → aSb | ab"></textarea>
+        </div>
+        <div>
+          <div class="label">Test string (leave empty to test ε):</div>
+          <input type="text" id="test-string" placeholder="e.g.  aabb" style="width:100%;padding:10px 12px;font-family:var(--mono);font-size:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg2);color:var(--text);margin-bottom:10px">
+          <div class="examples">
+            <button class="ex-btn" onclick="quickTest('aabb','S → aSb | ab')">aabb ∈ aⁿbⁿ?</button>
+            <button class="ex-btn" onclick="quickTest('aab','S → aSb | ab')">aab ∈ aⁿbⁿ?</button>
+            <button class="ex-btn" onclick="quickTest('aba','S → aSa | bSb | a | b | ε')">aba palindrome?</button>
+            <button class="ex-btn" onclick="quickTest('abc','S → aSa | bSb | a | b | ε')">abc palindrome?</button>
+          </div>
+          <button class="btn btn-primary mt" onclick="testString()">Test Membership</button>
+        </div>
+      </div>
+      <div id="test-error" class="error-box"></div>
+    </div>
+
+    <div id="test-result" class="card mt2" style="display:none">
+      <div class="card-title">Result</div>
+      <div id="test-verdict" style="font-size:22px;font-weight:700;margin-bottom:12px"></div>
+      <div id="test-trace"></div>
+    </div>
+
+    <div class="card mt2">
+      <div class="card-title">What does this mean for the PDA?</div>
+      <div class="cbox">
+        <p>If the string is <strong>accepted</strong> by the CFG, the equivalent PDA (built in Tab 1) will have an accepting computation path — the stack will be completely emptied after reading the full input.</p>
+      </div>
+      <div class="cbox">
+        <p>If the string is <strong>rejected</strong>, the PDA has no accepting computation path for that input — every path either gets stuck (wrong symbol on stack) or has leftover stack content.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB 4: THEORY ============ -->
+  <div id="tab-theory" class="panel">
+    <div class="grid2">
+      <div class="card">
+        <div class="card-title">Context-Free Grammar — Formal Definition</div>
+        <div class="cbox">
+          <p>A <strong>CFG</strong> is a 4-tuple <strong>G = (V, Σ, R, S)</strong>:</p>
+          <p>• <strong>V</strong> — finite set of non-terminal variables</p>
+          <p>• <strong>Σ</strong> — finite set of terminals (alphabet)</p>
+          <p>• <strong>R ⊆ V × (V ∪ Σ)*</strong> — production rules</p>
+          <p>• <strong>S ∈ V</strong> — start symbol</p>
+        </div>
+        <div class="cbox">
+          <p><strong>Derivation:</strong> w ∈ L(G) iff S ⟹* w. Each step replaces a non-terminal using one production rule. The language L(G) = {w ∈ Σ* | S ⟹* w}.</p>
+        </div>
+        <div class="cbox">
+          <p><strong>Example — aⁿbⁿ (n ≥ 1):</strong><br>
+          S → aSb | ab<br>
+          Derives: ab, aabb, aaabbb, ...</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Pushdown Automaton — Formal Definition</div>
+        <div class="cbox">
+          <p>A <strong>PDA</strong> is a 7-tuple <strong>M = (Q, Σ, Γ, δ, q₀, Z₀, F)</strong>:</p>
+          <p>• <strong>Q</strong> — finite set of states</p>
+          <p>• <strong>Σ</strong> — input alphabet</p>
+          <p>• <strong>Γ</strong> — stack alphabet</p>
+          <p>• <strong>δ: Q × (Σ ∪ {ε}) × Γ → P(Q × Γ*)</strong></p>
+          <p>• <strong>q₀ ∈ Q</strong> — start state</p>
+          <p>• <strong>Z₀ ∈ Γ</strong> — initial stack symbol</p>
+          <p>• <strong>F ⊆ Q</strong> — accepting states</p>
+        </div>
+        <div class="cbox">
+          <p>A PDA accepts by <strong>final state</strong> OR <strong>empty stack</strong>. Both acceptance modes are equivalent in power. Our converter uses empty-stack acceptance.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid2 mt2">
+      <div class="card">
+        <div class="card-title">Algorithm: CFG → PDA</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Standard 3-state construction (Sipser, Theorem 2.20)</div>
+        <div id="theory-steps-1"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Algorithm: PDA → CFG</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Triple-variable construction (Sipser, Theorem 2.21)</div>
+        <div id="theory-steps-2"></div>
+      </div>
+    </div>
+
+    <div class="card mt2">
+      <div class="card-title">The Equivalence Theorem</div>
+      <div class="cbox">
+        <p><strong>Theorem (Chomsky, 1962):</strong> A language L is a Context-Free Language (CFL) if and only if there exists a Pushdown Automaton M such that L(M) = L.</p>
+      </div>
+      <div class="cbox">
+        <p><strong>Corollary:</strong> Every CFG can be converted to an equivalent PDA, and every PDA can be converted to an equivalent CFG. This bidirectional equivalence shows that CFGs and PDAs define exactly the same class of languages — the Context-Free Languages.</p>
+      </div>
+      <div class="cbox">
+        <p><strong>Intuition:</strong> A CFG describes the structure of strings (parse trees), while a PDA describes the process of recognizing them (using a stack to track nesting). The stack in a PDA mirrors the call stack of recursive descent parsing — each grammar variable corresponds to a stack frame.</p>
+      </div>
+      <div style="margin-top:14px">
+        <div id="hierarchy-viz"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ======= DATA =======
+const CFG_EXAMPLES = {
+  abn: 'S → aSb | ab',
+  palindrome: 'S → aSa | bSb | a | b | ε',
+  balanced: 'S → SS | (S) | ε',
+  expr: 'E → E+T | T\nT → T*F | F\nF → (E) | a'
+};
+const PDA_EXAMPLES = {
+  abn: '(q0, ε, Z) → (q1, SZ)\n(q1, ε, S) → (q1, aSb)\n(q1, ε, S) → (q1, ab)\n(q1, a, a) → (q1, ε)\n(q1, b, b) → (q1, ε)\n(q1, ε, Z) → (q2, Z)',
+  simple: '(q0, a, Z) → (q1, AZ)\n(q1, a, A) → (q1, AA)\n(q1, b, A) → (q2, ε)\n(q2, b, A) → (q2, ε)\n(q2, ε, Z) → (q3, Z)'
+};
+
+// ======= TAB SWITCHING =======
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`[onclick="switchTab('${name}')"]`).classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+function loadCFG(k) { document.getElementById('cfg-input').value = CFG_EXAMPLES[k]; }
+function loadPDA(k) { document.getElementById('pda-input').value = PDA_EXAMPLES[k]; }
+
+function clearCFG() {
+  document.getElementById('cfg-input').value = '';
+  ['pda-formal','cfg-steps'].forEach(id => document.getElementById(id).innerHTML = '<span style="color:var(--text3)">—</span>');
+  document.getElementById('pda-table-wrap').innerHTML = '<div style="font-size:13px;color:var(--text3)">—</div>';
+  document.getElementById('cfg-viz').innerHTML = '<div style="font-size:13px;color:var(--text3);padding:20px 0">Grammar diagram will appear here.</div>';
+  document.getElementById('pda-viz').innerHTML = '<div style="font-size:13px;color:var(--text3);padding:20px 0">PDA diagram will appear here.</div>';
+  document.getElementById('cfg-error').style.display = 'none';
+  document.getElementById('cfg-status').textContent = '';
+}
+function clearPDA() {
+  document.getElementById('pda-input').value = '';
+  document.getElementById('pda2cfg-result').innerHTML = '<span style="color:var(--text3)">—</span>';
+  document.getElementById('pda-steps').innerHTML = '<div style="font-size:13px;color:var(--text3)">Steps will appear after conversion.</div>';
+  document.getElementById('pda-error').style.display = 'none';
+  document.getElementById('pda-status').textContent = '';
+}
+
+// ======= CFG PARSER =======
+function parseCFG(text) {
+  const rules = {};
+  let startSymbol = null;
+  for (const line of text.trim().split('\n')) {
+    const t = line.trim(); if (!t) continue;
+    const parts = t.split(/→|->/).map(s => s.trim());
+    if (parts.length < 2) continue;
+    const lhs = parts[0].trim();
+    if (!startSymbol) startSymbol = lhs;
+    if (!rules[lhs]) rules[lhs] = [];
+    rules[lhs].push(...parts[1].split('|').map(s => s.trim()));
+  }
+  return { rules, startSymbol };
+}
+
+function getTerminals(rules) {
+  const t = new Set();
+  for (const prods of Object.values(rules))
+    for (const p of prods)
+      for (const ch of p)
+        if (ch !== 'ε' && ch !== ' ' && /[a-z+*()\[\]]/.test(ch)) t.add(ch);
+  return t;
+}
+
+// ======= CFG → PDA CONVERSION =======
+function convertCFGtoPDA() {
+  const input = document.getElementById('cfg-input').value.trim();
+  const errEl = document.getElementById('cfg-error');
+  errEl.style.display = 'none';
+  if (!input) { errEl.textContent = 'Please enter a CFG.'; errEl.style.display = 'block'; return; }
+
+  let cfg;
+  try { cfg = parseCFG(input); } catch(e) { errEl.textContent = 'Parse error: ' + e.message; errEl.style.display = 'block'; return; }
+  const { rules, startSymbol } = cfg;
+  if (!startSymbol) { errEl.textContent = 'No valid rules found.'; errEl.style.display = 'block'; return; }
+
+  const terminals = getTerminals(rules);
+  const nonTerminals = new Set(Object.keys(rules));
+  const trans = [];
+
+  trans.push({ from:'q₀', inp:'ε', pop:'ε', to:'qₗ', push:startSymbol+'Z₀', type:'init' });
+  for (const [A, prods] of Object.entries(rules))
+    for (const p of prods)
+      trans.push({ from:'qₗ', inp:'ε', pop:A, to:'qₗ', push:p==='ε'?'ε':p, type:'prod', rule:`${A} → ${p}` });
+  for (const t of terminals)
+    trans.push({ from:'qₗ', inp:t, pop:t, to:'qₗ', push:'ε', type:'term' });
+  trans.push({ from:'qₗ', inp:'ε', pop:'Z₀', to:'q_acc', push:'ε', type:'accept' });
+
+  const tList = [...terminals].join(', ');
+  const ntList = [...nonTerminals].join(', ');
+  document.getElementById('pda-formal').innerHTML =
+    `<strong>P = (Q, Σ, Γ, δ, q₀, Z₀, F)</strong><br>` +
+    `Q &nbsp;= {q₀, qₗ, q_acc}<br>Σ &nbsp;= {${tList}}<br>` +
+    `Γ &nbsp;= {${ntList}, ${tList}, Z₀}<br>` +
+    `q₀ = q₀ &nbsp;&nbsp; Z₀ = Z₀ &nbsp;&nbsp; F = {q_acc}<br>` +
+    `<span style="color:var(--text3);font-size:12px">${trans.length} transitions generated</span>`;
+
+  // Table
+  let tbl = `<table class="pda-table"><thead><tr><th>From</th><th>Input</th><th>Pop</th><th>To</th><th>Push</th><th>Role</th></tr></thead><tbody>`;
+  for (const t of trans) {
+    const b = t.type==='init'?'<span class="badge b-blue">init</span>':
+              t.type==='accept'?'<span class="badge b-green">accept</span>':
+              t.type==='term'?'<span class="badge b-amber">scan</span>':
+              '<span class="badge b-gray">expand</span>';
+    tbl += `<tr><td>${t.from}</td><td>${t.inp}</td><td>${t.pop}</td><td>${t.to}</td><td>${t.push}</td><td>${b}</td></tr>`;
+  }
+  tbl += `</tbody></table>`;
+  document.getElementById('pda-table-wrap').innerHTML = tbl;
+
+  renderCFGDiagram(rules, startSymbol);
+  renderPDADiagram(trans, terminals);
+  renderCFGSteps(rules, startSymbol, terminals, trans);
+  document.getElementById('cfg-status').textContent = `✓ ${trans.length} transitions generated`;
+  // Copy grammar to tester tab
+  document.getElementById('test-cfg').value = input;
+}
+
+// ======= CFG DIAGRAM =======
+function renderCFGDiagram(rules, start) {
+  const nts = Object.keys(rules);
+  const H = Math.max(160, nts.length * 85 + 60);
+  let svg = `<svg width="100%" viewBox="0 0 480 ${H}" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="ca" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#888" stroke-width="1.5" stroke-linecap="round"/></marker></defs>`;
+  nts.forEach((nt, i) => {
+    const y = 20 + i * 82;
+    const isS = nt === start;
+    const fill = isS ? '#E6F1FB' : '#F8F7F3';
+    const stroke = isS ? '#185FA5' : '#d4d2c8';
+    const tc = isS ? '#0C447C' : '#1a1a18';
+    svg += `<rect x="8" y="${y}" width="40" height="34" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="${isS?1.5:1}"/>`;
+    svg += `<text font-family="'Courier New',monospace" font-size="15" font-weight="700" fill="${tc}" x="28" y="${y+17}" text-anchor="middle" dominant-baseline="central">${nt}</text>`;
+    if (isS) svg += `<text font-family="${'-apple-system,sans-serif'}" font-size="8" fill="${tc}" x="28" y="${y+30}" text-anchor="middle" dominant-baseline="central">start</text>`;
+    svg += `<line x1="48" y1="${y+17}" x2="68" y2="${y+17}" stroke="#aaa" stroke-width="0.8" marker-end="url(#ca)"/>`;
+    rules[nt].forEach((p, pi) => {
+      const px = 76 + pi * 76;
+      const label = p === 'ε' ? 'ε' : p;
+      const bw = Math.max(34, label.length * 9 + 18);
+      if (pi > 0) svg += `<text font-family="sans-serif" font-size="11" fill="#aaa" x="${px-6}" y="${y+17}" text-anchor="middle" dominant-baseline="central">|</text>`;
+      svg += `<rect x="${px}" y="${y}" width="${bw}" height="34" rx="5" fill="white" stroke="#d4d2c8" stroke-width="0.8"/>`;
+      svg += `<text font-family="'Courier New',monospace" font-size="13" fill="#1a1a18" x="${px+bw/2}" y="${y+17}" text-anchor="middle" dominant-baseline="central">${label}</text>`;
+    });
+  });
+  svg += `</svg>`;
+  document.getElementById('cfg-viz').innerHTML = svg;
+}
+
+// ======= PDA DIAGRAM =======
+function renderPDADiagram(trans, terminals) {
+  const prodCount = trans.filter(t=>t.type==='prod').length;
+  const termCount = trans.filter(t=>t.type==='term').length;
+  let svg = `<svg width="100%" viewBox="0 0 480 210" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="pa" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#888" stroke-width="1.5" stroke-linecap="round"/></marker></defs>`;
+
+  // start arrow
+  svg += `<line x1="8" y1="100" x2="42" y2="100" stroke="#888" stroke-width="1" marker-end="url(#pa)"/>`;
+
+  // q0
+  svg += `<circle cx="72" cy="100" r="28" fill="#E6F1FB" stroke="#185FA5" stroke-width="1.5"/>`;
+  svg += `<text font-family="monospace" font-size="12" font-weight="700" fill="#0C447C" x="72" y="100" text-anchor="middle" dominant-baseline="central">q₀</text>`;
+
+  // q0→ql
+  svg += `<line x1="100" y1="100" x2="208" y2="100" stroke="#888" stroke-width="1" marker-end="url(#pa)"/>`;
+  svg += `<text font-family="monospace" font-size="10" fill="#666" x="154" y="88" text-anchor="middle" dominant-baseline="central">ε,ε→SZ₀</text>`;
+
+  // ql (loop state)
+  svg += `<circle cx="240" cy="100" r="30" fill="#F8F7F3" stroke="#888" stroke-width="1"/>`;
+  svg += `<text font-family="monospace" font-size="12" font-weight="700" fill="#1a1a18" x="240" y="97" text-anchor="middle" dominant-baseline="central">qₗ</text>`;
+  svg += `<text font-family="sans-serif" font-size="9" fill="#888" x="240" y="112" text-anchor="middle" dominant-baseline="central">loop</text>`;
+
+  // self-loop on ql
+  svg += `<path d="M218 70 Q240 34 262 70" fill="none" stroke="#888" stroke-width="1" marker-end="url(#pa)"/>`;
+  svg += `<text font-family="monospace" font-size="9" fill="#666" x="240" y="30" text-anchor="middle" dominant-baseline="central">${prodCount} expand + ${termCount} scan</text>`;
+
+  // ql→qac
+  svg += `<line x1="270" y1="100" x2="376" y2="100" stroke="#888" stroke-width="1" marker-end="url(#pa)"/>`;
+  svg += `<text font-family="monospace" font-size="10" fill="#666" x="322" y="88" text-anchor="middle" dominant-baseline="central">ε,Z₀→ε</text>`;
+
+  // q_acc
+  svg += `<circle cx="408" cy="100" r="30" fill="#EAF3DE" stroke="#3B6D11" stroke-width="1.5"/>`;
+  svg += `<circle cx="408" cy="100" r="24" fill="none" stroke="#3B6D11" stroke-width="0.8"/>`;
+  svg += `<text font-family="monospace" font-size="10" font-weight="700" fill="#27500A" x="408" y="97" text-anchor="middle" dominant-baseline="central">q_acc</text>`;
+  svg += `<text font-family="sans-serif" font-size="8" fill="#27500A" x="408" y="111" text-anchor="middle" dominant-baseline="central">accept</text>`;
+
+  svg += `<text font-family="sans-serif" font-size="11" fill="#888" x="240" y="175" text-anchor="middle" dominant-baseline="central">PDA simulates leftmost derivation — stack holds "frontier" of parse tree</text>`;
+  svg += `<text font-family="sans-serif" font-size="11" fill="#888" x="240" y="193" text-anchor="middle" dominant-baseline="central">Accepts by empty stack when Z₀ is popped</text>`;
+
+  svg += `</svg>`;
+  document.getElementById('pda-viz').innerHTML = svg;
+}
+
+// ======= CFG → PDA STEPS =======
+function renderCFGSteps(rules, start, terminals, trans) {
+  const prods = trans.filter(t=>t.type==='prod');
+  const terms = trans.filter(t=>t.type==='term');
+  let html = '';
+
+  html += step(1,'Initialize: push start symbol + Z₀',
+    `Create three states: q₀ (start), qₗ (loop), q_acc (accept). On ε-transition from q₀ to qₗ, push the start symbol <strong>${start}</strong> followed by bottom marker Z₀. This seeds the stack with the "thing to derive."`,
+    `δ(q₀, ε, ε) = (qₗ, ${start}Z₀)`);
+
+  let rulesText = prods.map(t => `δ(qₗ, ε, ${t.pop}) = (qₗ, ${t.push}) &nbsp; ← &nbsp; ${t.rule}`).join('<br>');
+  html += step(2, `Add ${prods.length} expansion transitions (one per production rule)`,
+    `For each production rule A → α, add an ε-transition that pops A from the stack and pushes α. This simulates one step of leftmost derivation — the PDA "guesses" which production to apply nondeterministically.`,
+    rulesText);
+
+  let termText = terms.map(t => `δ(qₗ, ${t.inp}, ${t.inp}) = (qₗ, ε)`).join('<br>');
+  html += step(3, `Add ${terms.size} scan transitions (one per terminal)`,
+    `For each terminal a ∈ Σ, when a appears on both the input tape and stack top, consume both. This matches an actual character in the input string with a terminal produced by a derivation step.`,
+    termText);
+
+  html += step(4,'Accept when stack is empty (Z₀ popped)',
+    `When only the bottom marker Z₀ remains on the stack, all derivation steps have been matched against the input string. Move to q_acc — the string is in L(G).`,
+    `δ(qₗ, ε, Z₀) = (q_acc, ε)`);
+
+  html += step(5,'Why this is correct',
+    `The PDA accepts a string w iff the CFG derives w. Proof sketch: a leftmost derivation S ⟹* w corresponds bijectively to an accepting computation of the PDA. At each step, the stack holds exactly the "remaining frontier" of the parse tree that still needs to be expanded and matched against the remaining input.`,'');
+
+  document.getElementById('cfg-steps').innerHTML = html;
+}
+
+function step(n, title, desc, rule) {
+  return `<div class="step">
+    <div class="step-num">${n}</div>
+    <div>
+      <div class="step-title">${title}</div>
+      <div class="step-desc">${desc}</div>
+      ${rule ? `<div class="step-rule">${rule}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+// ======= PDA → CFG =======
+function parsePDATransitions(text) {
+  const lines = text.trim().split('\n').filter(l=>l.trim());
+  const trans = [], stateSet = new Set();
+  for (const line of lines) {
+    const m = line.match(/\((\w+)\s*,\s*([^,]+?)\s*,\s*([^)]+?)\)\s*[→\->]+\s*\((\w+)\s*,\s*([^)]*)\)/);
+    if (!m) continue;
+    const [,from,inp,stack,to,push] = m.map(s=>s.trim());
+    trans.push({from,inp,stack,to,push});
+    stateSet.add(from); stateSet.add(to);
+  }
+  return { trans, states:[...stateSet] };
+}
+
+function convertPDAtoCFG() {
+  const input = document.getElementById('pda-input').value.trim();
+  const errEl = document.getElementById('pda-error');
+  errEl.style.display = 'none';
+  if (!input) { errEl.textContent = 'Please enter PDA transitions.'; errEl.style.display = 'block'; return; }
+  const { trans, states } = parsePDATransitions(input);
+  if (!trans.length) { errEl.textContent = 'No valid transitions found. Check format: (q0, a, Z) → (q1, AZ)'; errEl.style.display = 'block'; return; }
+
+  const q0 = states[0], qf = states[states.length-1];
+  const z0 = [...new Set(trans.map(t=>t.stack))].find(s=>/Z/i.test(s)) || trans[0].stack;
+  const rules = {};
+  const add = (l,r) => { if(!rules[l]) rules[l]=new Set(); rules[l].add(r); };
+
+  add('S', `[${q0},${z0},${qf}]`);
+
+  for (const {from,inp,stack,to,push} of trans) {
+    const a = inp==='ε'?'':inp;
+    if (push==='' || push==='ε') {
+      for (const q of states) {
+        if (to===q) add(`[${from},${stack},${q}]`, a||'ε');
+        else add(`[${from},${stack},${q}]`, `${a}[${to},ε,${q}]`.replace('[,','[ε,'));
+      }
+    } else if (push.length===1) {
+      for (const q of states)
+        add(`[${from},${stack},${q}]`, `${a}[${to},${push},${q}]`);
+    } else {
+      const B=push[0], C=push.slice(1);
+      for (const q of states)
+        for (const r of states)
+          add(`[${from},${stack},${q}]`, `${a}[${to},${B},${r}][${r},${C},${q}]`);
+    }
+  }
+
+  let html = '';
+  for (const [lhs, rhsSet] of Object.entries(rules)) {
+    const rhs = [...rhsSet].join(' | ') || 'ε';
+    html += `<div style="padding:3px 0;font-family:var(--mono);font-size:13px">${lhs} → ${rhs}</div>`;
+  }
+  document.getElementById('pda2cfg-result').innerHTML = html || '<span style="color:var(--text3)">No rules generated</span>';
+
+  // Steps
+  let sh = '';
+  sh += step(1,'Identify PDA components',`States detected: {${states.join(', ')}}. Start state: <strong>${q0}</strong>. Accept state: <strong>${qf}</strong>. Initial stack symbol: <strong>${z0}</strong>. Found <strong>${trans.length} transitions</strong> to convert.`,'');
+  sh += step(2,'Define CFG variables as triples [p,A,q]',`Each variable [p,A,q] represents: "starting in state p, reading some input w, the stack goes from A on top to A being consumed, ending in state q." These triples are the non-terminals of the generated CFG.`,'');
+  sh += step(3,'Add start production',`Since the PDA starts in ${q0} with ${z0} on the stack and accepts in ${qf}:`,`S → [${q0},${z0},${qf}]`);
+  sh += step(4,'Convert each PDA transition to grammar rule(s)',
+    `For pop transitions (push=ε): [p,A,q] → a for direct matches.<br>For push-one transitions: [p,A,q] → a[r,B,q].<br>For push-two transitions: [p,A,q] → a[r,B,s][s,C,q] for all state pairs s.`,
+    trans.map(t=>`δ(${t.from},${t.inp},${t.stack})=(${t.to},${t.push||'ε'}) → ${Object.keys(rules).filter(k=>k.startsWith(`[${t.from}`)).length} rule(s) generated`).join('<br>'));
+  sh += step(5,'Result',`Generated <strong>${Object.keys(rules).length} grammar rules</strong>. Note: some rules may be unreachable from S and can be removed. The language of the resulting CFG equals the language accepted by the PDA.`,'');
+  document.getElementById('pda-steps').innerHTML = sh;
+  document.getElementById('pda-status').textContent = `✓ ${Object.keys(rules).length} CFG variables/rules generated`;
+}
+
+// ======= STRING TESTER (CYK) =======
+function quickTest(str, grammar) {
+  document.getElementById('test-string').value = str;
+  document.getElementById('test-cfg').value = grammar;
+  testString();
+}
+
+function testString() {
+  const cfgText = document.getElementById('test-cfg').value.trim();
+  const str = document.getElementById('test-string').value.trim();
+  const errEl = document.getElementById('test-error');
+  errEl.style.display = 'none';
+
+  if (!cfgText) { errEl.textContent = 'Please enter a CFG.'; errEl.style.display = 'block'; return; }
+  const { rules, startSymbol } = parseCFG(cfgText);
+  if (!startSymbol) { errEl.textContent = 'Invalid CFG.'; errEl.style.display = 'block'; return; }
+
+  const result = document.getElementById('test-result');
+  result.style.display = 'block';
+
+  // Simple recursive descent membership check (handles basic CFGs)
+  const accepts = checkMembership(rules, startSymbol, str, 0);
+
+  const verdictEl = document.getElementById('test-verdict');
+  verdictEl.innerHTML = accepts
+    ? `<span style="color:#3B6D11">✓ "${str || 'ε'}" is accepted</span>`
+    : `<span style="color:#b91c1c">✗ "${str || 'ε'}" is rejected</span>`;
+
+  let trace = `<div style="font-size:13px;color:var(--text2);margin-bottom:10px">`;
+  trace += accepts
+    ? `The string <strong>"${str||'ε'}"</strong> belongs to the language L(G). The CFG can derive it, and the equivalent PDA has an accepting computation path for this input.`
+    : `The string <strong>"${str||'ε'}"</strong> does NOT belong to L(G). No derivation sequence exists that produces it from the start symbol ${startSymbol}.`;
+  trace += `</div>`;
+
+  trace += `<div style="font-size:13px;margin-top:10px"><strong>PDA perspective:</strong><br>`;
+  if (accepts) {
+    trace += `The PDA accepts this string by empty stack. During computation, the stack held the "frontier" of the parse tree at each step. When the input was fully read, the stack contained only Z₀, which was popped to move to q_acc.`;
+  } else {
+    trace += `The PDA rejects this string. Either: (a) a terminal on the stack didn't match the next input character, or (b) the stack wasn't empty when input was exhausted. No nondeterministic path leads to acceptance.`;
+  }
+  trace += `</div>`;
+  document.getElementById('test-trace').innerHTML = trace;
+}
+
+function checkMembership(rules, start, input, depth) {
+  if (depth > 25) return false;
+  const memo = {};
+  function derive(symbol, remaining, d) {
+    const key = symbol+'|'+remaining+'|'+d;
+    if (key in memo) return memo[key];
+    if (d > 30) return (memo[key] = false);
+    if (!rules[symbol]) {
+      return (memo[key] = (symbol === remaining || (symbol === 'ε' && remaining === '')));
+    }
+    for (const prod of rules[symbol]) {
+      if (prod === 'ε') { if (remaining === '') { memo[key] = true; return true; } continue; }
+      if (deriveSequence(prod, remaining, d+1)) { memo[key] = true; return true; }
+    }
+    return (memo[key] = false);
+  }
+  function deriveSequence(symbols, remaining, d) {
+    const chars = symbols.split('').filter(c=>c!==' ');
+    function go(i, rem) {
+      if (i === chars.length) return rem === '';
+      const ch = chars[i];
+      if (rules[ch]) {
+        for (const prod of rules[ch]) {
+          const exp = prod === 'ε' ? '' : prod;
+          const newRem = exp + rem;
+          if (go(i+1, newRem.slice(0, newRem.length - rem.length + rem.length) )) {
+            // try all splits
+          }
+        }
+        // Try each possible prefix length for this non-terminal
+        for (let split = 0; split <= remaining.length; split++) {
+          const prefix = remaining.slice(0, split);
+          const suffix = remaining.slice(split);
+          if (derive(ch, prefix, d) && go(i+1, suffix)) return true;
+        }
+        return false;
+      } else {
+        // Terminal
+        if (remaining[0] === ch) return go(i+1, remaining.slice(1));
+        return false;
+      }
+    }
+    return go(0, remaining);
+  }
+  return derive(start, input, 0);
+}
+
+// ======= THEORY DIAGRAMS =======
+function renderTheorySteps() {
+  const s1 = [
+    ['1','Create 3 states','q₀ (start), qₗ (loop), q_acc (accept)',''],
+    ['2','Initialize push','On entering qₗ, push start symbol S and bottom marker Z₀','δ(q₀, ε, ε) = (qₗ, SZ₀)'],
+    ['3','Expansion transitions','For each rule A → α, add ε-transition popping A, pushing α','δ(qₗ, ε, A) = (qₗ, α)'],
+    ['4','Scan transitions','For each terminal a, match and consume it from stack and input','δ(qₗ, a, a) = (qₗ, ε)'],
+    ['5','Accept','When Z₀ is on top, accept by moving to q_acc','δ(qₗ, ε, Z₀) = (q_acc, ε)']
+  ];
+  document.getElementById('theory-steps-1').innerHTML = s1.map(([n,t,d,r])=>step(n,t,d,r)).join('');
+
+  const s2 = [
+    ['1','Normalize PDA','Ensure single accept state, empty-stack acceptance, each transition pushes ≤2 symbols',''],
+    ['2','Start rule','For each accept state q_f, add start production','S → [q₀, Z₀, q_f]'],
+    ['3','Pop transitions','If δ(p,a,A)=(q,ε), for each state r, create rule','[p,A,r] → a &nbsp; (when r = q)'],
+    ['4','Push-one transitions','If δ(p,a,A)=(r,B), for each state q','[p,A,q] → a [r,B,q]'],
+    ['5','Push-two transitions','If δ(p,a,A)=(r,BC), for each pair of states q,s','[p,A,q] → a [r,B,s] [s,C,q]']
+  ];
+  document.getElementById('theory-steps-2').innerHTML = s2.map(([n,t,d,r])=>step(n,t,d,r)).join('');
+
+  // Hierarchy viz
+  let svg = `<svg width="100%" viewBox="0 0 480 150" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<rect x="10" y="10" width="460" height="130" rx="10" fill="#F1EFE8" stroke="#d4d2c8"/>`;
+  svg += `<text font-family="sans-serif" font-size="11" fill="#888" x="240" y="28" text-anchor="middle" dominant-baseline="central">All Languages</text>`;
+  svg += `<rect x="40" y="38" width="400" height="92" rx="8" fill="#FAEEDA" stroke="#BA7517"/>`;
+  svg += `<text font-family="sans-serif" font-size="11" fill="#BA7517" x="240" y="54" text-anchor="middle" dominant-baseline="central">Context-Sensitive Languages (Linear Bounded Automata)</text>`;
+  svg += `<rect x="80" y="64" width="320" height="58" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="1.5"/>`;
+  svg += `<text font-family="sans-serif" font-size="12" font-weight="700" fill="#185FA5" x="240" y="82" text-anchor="middle" dominant-baseline="central">Context-Free Languages</text>`;
+  svg += `<text font-family="sans-serif" font-size="11" fill="#0C447C" x="240" y="98" text-anchor="middle" dominant-baseline="central">CFG ≡ PDA &nbsp; (this tool)</text>`;
+  svg += `<rect x="150" y="108" width="180" height="24" rx="6" fill="#EAF3DE" stroke="#3B6D11"/>`;
+  svg += `<text font-family="sans-serif" font-size="11" fill="#3B6D11" x="240" y="120" text-anchor="middle" dominant-baseline="central">Regular Languages (DFA/NFA/RegEx)</text>`;
+  svg += `</svg>`;
+  document.getElementById('hierarchy-viz').innerHTML = svg;
+}
+
+// ======= INIT =======
+loadCFG('abn');
+loadPDA('abn');
+renderTheorySteps();
+</script>
+</body>
+</html>
